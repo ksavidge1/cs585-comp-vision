@@ -1,0 +1,116 @@
+<html>
+
+<head>
+<title>Kyle Savidge - CS585</title>
+<style>
+<!--
+body{
+font-family: 'Trebuchet MS', Verdana;
+}
+p{
+font-family: 'Trebuchet MS', Times;
+margin: 10px 10px 15px 20px;
+}
+h3{
+margin: 5px;
+}
+h2{
+margin: 10px;
+}
+h1{
+margin: 10px 0px 0px 20px;
+}
+div.main-body{
+align:center;
+margin: 30px;
+}
+hr{
+margin:20px 0px 20px 0px;
+}
+-->
+</style>
+</head>
+
+<body bgcolor="#ffffff">
+
+<h1>HW#3: Segmentation and Object Shape Analysis</h1>
+<hr>
+<h2>Problem Definition</h2>
+<p>In this homework, we set out to identify objects in several different datasets using thresholding algorithms and morphological information.&nbsp; This is a relatively easy task for the human eye; if you are shown a microscope image of a group of cells, you can point to them and quickly make determinations between where object and background differ.&nbsp; This problem is much harder for a computer vision application that is trying to perform the same function.&nbsp; There are confounding factors that can make it very difficult, such as similar intensity values for object and background, or overlapping of multiple objects resulting in a single contour surrounding the both objects.&nbsp;</p>
+<p>The problem was slightly different, depending on which dataset we were working with.&nbsp; When using cells, the issue was that the cells themselves were very similar in intensity value to the background, but they were surrounded by a brighter background right by their edges.&nbsp; Sometimes these bright edges were completely closed, but others, the bright contour line would only surround part of the cell, making it harder to pick out the correct area.</p>
+<p>For the images of the bats, there was another unique problem we faced, which involved different bats appearing to overlap one another because of their spatial depth in relation to the camera.&nbsp; This could throw off the ability to calculate their circularity ratio, which was important in this dataset in determining whether they had their wings opened or closed.</p>
+<p>Lastly, we worked with the aquarium dataset.&nbsp; This proved to be the most difficult of the 3 for us to work on.&nbsp; There was a variety of different shapes, sizes, and colors to pick out.&nbsp; Additionally, going by grayscale intensity was more challenging due to the plants in the images having similar intensity values to some of the fish.</p>
+<p>&nbsp;</p>
+<hr>
+<h2>Method &amp; Implementation</h2>
+<p>The first part of our computer vision system in this assignment relied on different types of thresholding.&nbsp; The most basic to work with is absolute thresholding, which says that anything with a given grayscale intensity or above is part of an object, and then everything below that value is background.&nbsp;</p>
+<img src="thresh.png" alt="threshold diagram" width="390" height="211">
+<p>This method proves to be fairly ineffective if the objects you are trying to isolate in the image are similar to anything in the background.&nbsp; You either start to lose image as you push the value of the threshold up too high, or you have too much background left in your image when the threshold value is too low.&nbsp; There are more techniques that we decided to use to replace this fairly simple algorithm.&nbsp; For example, when using adaptive thresholding, you look at smaller regions of the image, calculate the mean for that smaller region, and then determine whether the origin should be considered object if it has a greater value than the local mean.&nbsp; You can also pass an additional parameter, c, which can be added (or subtracted) from the mean before performing the comparison against the origin pixels.&nbsp;</p>
+<p>Another trick that we used for the aquarium dataset was to focus on smaller regions of the image when applying the threshold.&nbsp; Since there were certain regions in which this fish was clearly blue, or clearly red, we would first separate out the most obvious channel in that region, and then applying the threshold in just that region could give us a cleaner result than applying an adaptive threshold using only the gray values over the entirety of the image.&nbsp;</p>
+<p>The next step after the thresholding was to apply the morphological operations of dilation and erosion.&nbsp; These algorithms for different purposes.&nbsp; For example, we use the erosion to clear away objects that are too small to be considered part of the actual object, but then use dilation to combine object regions that we expect belong to the same object, if it looks like there are any breaks in the boundaries.&nbsp; These are applied in successive loops in such a way that we try to hold on to the best image data, while not eroding away too much and not incorrectly dilating multiple different components into one.&nbsp; It took several iterations to find the appropriate dilation and erosion pixel sizes to work with, as well as the optimal shape.&nbsp; In general, it depends which applications are needed to make the best morphological transformations on the images.</p>
+<p>When we were confident that we had selected only object pixels that we wanted, we then wanted to find all of the pixels that made up the boundaries of these remaining objects so we could perform some additional calculations on the object regions.&nbsp; We were able to implement a connected component algorithm that recursively searches the 8 neighbors of a given pixel, and determines whether or not that pixel should also be considered boundary.&nbsp; The algorithm will continue around the edges of the image, checking each neighbor pixel in the clockwise direction, until it has made it all the way back to the start pixel of that region.&nbsp; It is possible to just use the cardinal directions (referred to as n=4), but we chose to implement both the cardinal directions and the diagonals as being considered neighborhood, which looks like the following:</p>
+<img src="neighborhood pixels.png" alt="neighborhood pixels" width="220" height="220">
+<p>Having all of the boundary pixels allowed us to perform functions of their area, perimeters, orientation, circularity, and compactness.&nbsp; The area and perimeter are easy to calculate with built-in functions in OpenCV.&nbsp; To get the circularity, we applied the method taught in class of E_min/E_max, where E_min = ((a+c)/2) - ((a-c)/2)*((a-c)/sqrt((a-c)^2+b^2)) - (b^2/(2*sqrt((a-c)^2+b^2))) and E_max = ((a+c)/2) + ((a-c)/2)*((a-c)/sqrt((a-c)^2+b^2)) + (b^2/(2*sqrt((a-c)^2+b^2))). Orientation was calculated using the principal component analysis methods that OpenCV teaches on their website, using the eigen values and eigenvectors of the different points in the boundary surfaces and calculating the dimension where most variance is occurring.&nbsp; Compactness is a straightforward analysis of the perimeter squared, divided by the area.&nbsp; We use cout in C++ to write these values to the console.&nbsp;</p>
+<p>&nbsp;</p>
+<hr>
+<h2>Experiment</h2>
+<p>Cells:</p>
+<p>For this data set, there weren't too many obtacles to implement the segmenatiaon. In fact, this was first dataset that we got our hands on. Thus, we developed most of the functions when we dealt with the cells images. First, we implemented the absolute threshold method and that worked fairly well on the cells. But considering absolute threshold might not work on the bats and the aquarium, we decided to use adatptive threshold to keep the functions applicable to other datasets. With block size = 121 &amp; c = -4, most of the cells can be separated from the background. However, in some frames, some cells were dectected as two components although the two were supposed to belong to one cell. To solve this problem, we implement the dilation and erosion functions, with dilation size = 2, erosion size = 1, dilation times = 4, erosion times = 5 to make the components connected again and meanwhile eliminate some small noises. For labeling objects and finding the boundaries, we used the floodfill function and wrote the boundary finding method ourselves using the Moore- neighbor tracing. For calculating the circularities and orientations, we modified the functions used in the last homework(hand dectection) and applied them on the cells and they worked well. </p>
+<p>Bats:</p>
+<p>For this dataset, most of the work was similar to the cells, since we already set our thresholding method to be adaptive thresholding. The block size is 75 and c = -4. what is noticeable is that to preserve more shape of the bats ( for dectecting their flying condition), we used a smaller size on blurring and also fewer times of dilation and erosion. We tried out different combinations of morphological operations and figured that only one time erosion with size 1 can optimize the images for later proccesing. The same augmentation function was used and an area check with threshold = 50 followed to eliminate the rest of the noise. For judging whether the bats have wings closed, we did a great amount of tests on different conditions and threshold. We figured if the circularity of a bat is greater than 0.5 then it has its wings closed and finally we painted it blue to be distingusihed from the others.</p>
+
+<p>Aquarium:</p>
+<p>For the hardest AquariumImages, we tried several approach for our first step:</p>
+
+<p>1. blur image and turing color image to gray scale by getting value of blue, or red. We found it make the huge plant less obvious, so it got better Threshold. </p>
+
+<p>2. Adaptive Threshold, it works very well in the darker area, but for fish near by the plants, the color of fish mixed up with the plants. By setting C (the threshold in the template ) to Trackbar, we found C= -6 came out the best result, and template size is 13. </p>
+
+<p><br />
+3. Absolute threshold, even we tried setting threshold from 0 to 255, it turned out very bad, because the light changes from area to area.</p>
+
+<p>4. Motion History: We also tried comparing the difference of current image between pervious image. The idea is, if the background isn't changing, the area of the difference is the moving object, which is fish. However, it doesn't work well, because the light, water, and bubble change constantly, and the fish move really slow. Some of the fish even almost don't move!</p>
+
+<p>After these trails, we realized it'll be almost impossible to get all the fish simply by these threshold. Therefore, we target different background, with different approach.<br />
+</p>
+
+<p>At the right down corner, the fish are blue, the background is dark. We get blue color to gray scale, and then apply Adaptive Threshold. It works extremely well. Even some hidden fish moving back and forth, hardly to be seen, can be detected!<br />
+</p>
+
+<p>At the top left corner, there are red fish, so we get the red color to gray scale, and then apply Adaptive Threshold, it works nicely.</p>
+
+<p>Then, we use the same flood-fill algorithm found the area and calculate orientation and circularity. </p>
+
+<p>For the area in the center, it still doesn't work well. We believe it needs more advanced approach, like neuron network.</p>
+
+<hr>
+<h2>Results</h2>
+<p>The cell images are seen in comparison against their originals below.  Notice in the cout window, we also have statistics about each of the different regions that are selected.</p>
+<img src="cell1.png" alt="cell1" width="1440" height="900">
+<br  />
+<img src="cell2.png" alt="cell2" width="1440" height="900">
+<br>
+<img src="bat1.png" alt="bat1" width="1440" height="900">
+<p> With the bat images, you can see the differences in color based on whether we decided their wings are opened or closed.  The blue bats are seen with their wings folded tight, while the white have their wings outstretched.</p>
+<img src="bat2.png" alt="bat2" width="1440" height="900">
+<p>For the aquarium image, there is only a selected region (the lower right) shown filtered because of our troubles with thresholding on the entire image at once.</p>
+<img src="fish1.png" alt="fish1" width="1440" height="900">
+<hr>
+<h2>Discussion</h2>
+<p>The functionality available in the OpenCV libraries for thresholding a given image is very easy to implement.&nbsp; What became more time consuming was trying to determine which of the values, or types of thresholds, actually looked the best on a given dataset.&nbsp; We used trackbars early in the design of this computer vision system to easily update the thresholding values and determine which would work best.&nbsp; However, this didn&rsquo;t always give successful results, especially with the fish, and we were left to spend more time thinking of creative ways on how to process them.&nbsp;</p>
+<p>The first dataset that we were able to tackle was the cells.&nbsp; This had nice edges for most cells, and I am actually curious to see how this would work with an edge detection algorithm (once we have learned about using them in class.)&nbsp; There were not too many confounding factors from the background, and there was a pretty clean result.&nbsp; The orientation and circularity measures have practical applications, such as determining what type of cell they might be, whether they are fully differentiated into that type or still developing, and whether they might be considered cancerous.&nbsp; Segmentation of cells is something that I focused on in an undergraduate research project that relied on MATLAB, and I would be curious to go back and apply some of the work that we have done for this class to that project using the OpenCV techniques we&rsquo;ve learned.</p>
+<p>The bats were also somewhat easy to find using the adaptive thresholding method.&nbsp; The circularity become particularly interesting to look at once we had processed the raw images, since it gave us a pretty good idea whether they had their wings completely opened or if they were folded.&nbsp; In the binary video stream, you can watch the evolution of their flight pattern from frame to frame and see their color change based on what their circularity ratio is calculated to be, and whether it is under our threshold for closed wings or not.&nbsp;</p>
+<p>We had the most trouble when working on the aquarium dataset.&nbsp; I think we could have spent quite a while trying out various algorithms on this data and still not been able to capture all of the different fish.&nbsp; The adaptive thresholding on a given color channel seemed like the best way we were able to get reasonable segmentation on these images.&nbsp; It would have been interesting to have more time and to research what other techniques might be out there for tricky data sets like this one.  For example, we discussed doing machine learning techniques if we had more processing power, or potentially template matching on some of the fish's features.  The other option would possibly be to template match on the plants, and if there is a change to the plants, we assume that there is a fish that has passed in front and we would call those pixels a fish.</p>
+<p>It was good to see that none of the algorithms became too intensive and slowed down the binary video significantly.&nbsp; This has been a challenge when applying some of the algorithms such as template matching in the previous homework, and made it difficult to see what was happening in real-time with those systems.&nbsp; The output of the various variables of interest, along with the colored images, can happen in rates of less than a second per image and gave interesting effects when cycling through the images in the datasets and seeing the objects change orientation, size and (for the bats especially) circularity.</p>
+<p>&nbsp;</p>
+<hr>
+<h2>Conclusions</h2>
+<p>This homework assignment was probably the most difficult to date, even though understanding the segmentation and morphological operations conceptually was very easy.&nbsp; It takes a lot of time when working with a given set of data to know what needs to be processed to end up with the best data, and I&rsquo;ve come away pretty amazed with human evolution&rsquo;s ability to easily determine where regions of interest are in our field of vision.&nbsp;</p>
+<p>However, it was a good exercise in a variety of different concepts.&nbsp; The iterative process using connected component analysis helped to solidify the technique of using the neighborhood pixels that was taught in class, although for future projects it may be easier and more efficient to just apply some of the built-in OpenCV library calls.&nbsp; Additionally, seeing ideas like orientation and circularity get applied to practical images was helpful in understanding why these computer vision systems are utilized outside of the classroom.&nbsp;</p>
+<hr>
+<h2>Credits and Bibliography</h2>
+<p>http://docs.opencv.org/3.0-beta/doc/tutorials/tutorials.html <br  /> Accessed 10/1/16 <br  />Project done in collaboration between Kyle Savidge, Mingxiang Cai, Huai Chun Shih</p>
+
+</div>
+</body>
+</html>
