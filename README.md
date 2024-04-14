@@ -1,4 +1,4 @@
-# CS585 Computer Vision course at Boston Univ.
+# CS585: Computer Vision - Boston University
 
 Code written in C++ with integration of OpenCV functionality.
 
